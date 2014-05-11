@@ -4,6 +4,8 @@
 import curses
 from functools import partial
 import itertools
+import json
+import os
 import select
 import signal
 import sys
@@ -11,7 +13,41 @@ import time
 
 from freecell import *
 
+class Stats(object):
+
+    def __init__(self, cfg):
+        self.games_played = cfg.get('games', 0)
+        self.games_won = cfg.get('won', 0)
+        self.total_time = cfg.get('total_time', 0)
+
+    def add_game(self):
+        self.games_played += 1
+
+    def add_game_won(self, t):
+        self.games_played += 1
+        self.games_won += 1
+        self.total_time += t
+
+    def get_average_time(self):
+        if self.games_won == 0:
+            return 0
+        return self.total_time // self.games_won
+
+    def clear(self):
+        self.games_played = 0
+        self.games_won = 0
+        self.total_time = 0
+
+    def save(self):
+        return {
+            'games': self.games_played,
+            'won': self.games_won,
+            'total_time': self.total_time,
+        }
+
 class FreeCellGame(object):
+
+    STATS_FILE = '~/.config/mur-freecell/stats.cfg'
 
     def __init__(self, stdscr):
         self.stdscr = stdscr
@@ -26,6 +62,7 @@ class FreeCellGame(object):
         self.pause_draw_callback = None
         self.queue_redraw = True
         self.quit = False
+        self.stats = Stats(self.load_config(self.STATS_FILE))
         self.stopped = False
         self.try_sweep = False
         self.undo_list = []
@@ -150,12 +187,15 @@ class FreeCellGame(object):
                     win.addstr(*self.repr_card(c))
                 win.addstr('  ')
 
+    def time_str(self, sec):
+        return '{:d}:{:02d}'.format(*divmod(int(sec), 60))
+
     def draw_clock(self, y, x):
         if self.paused:
             t = int(self.pause_time - self.time_offset)
         else:
             t = int(time.time() - self.time_offset)
-        s = '{:d}:{:02d}'.format(*divmod(t, 60))
+        s = self.time_str(t)
         self.stdscr.addstr(0, x - len(s) - 2, s, curses.A_REVERSE)
 
     def draw_message(self, y, x):
@@ -171,16 +211,34 @@ class FreeCellGame(object):
     def draw_pause(self, y, x):
         if self.pause_draw_callback is None:
             s = 'Paused'
-            self.stdscr.addstr(y // 2, (x - len(s)) // 2, s)
+            self.draw_centered(y // 2, x, s)
         else:
             self.pause_draw_callback(y, x)
 
     def draw_stopped(self, y, x):
         s = 'You won!'
-        self.stdscr.addstr(y // 2, (x - len(s)) // 2, s, curses.A_BOLD)
+        self.draw_centered(y // 2, x, s, curses.A_BOLD)
+
+    def draw_centered(self, y, x, s, attr = 0):
+        self.stdscr.addstr(y, (x - len(s)) // 2, s, attr)
 
     def draw_stats(self, y, x):
-        pass # TODO
+        stats = self.stats
+
+        lines = [
+            'Games played: {:>5}'.format(stats.games_played),
+            'Games won:    {:>5}'.format(stats.games_won),
+            'Average time: {:>5}'.format(self.time_str(stats.get_average_time())),
+        ]
+
+        starty = (y - (len(lines) + 4)) // 2
+
+        self.draw_centered(starty, x, 'STATS', curses.A_BOLD)
+
+        for i, s in enumerate(lines, 2):
+            self.draw_centered(starty + i, x, s)
+
+        self.draw_centered(starty + len(lines) + 3, x, "Press 'c' to clear")
 
     def draw_title(self, y, x):
         self.stdscr.addstr(0, 0, 'FreeCell')
@@ -208,11 +266,18 @@ class FreeCellGame(object):
 
             self.after_tick()
 
+        if not self.stopped:
+            self.stats.add_game()
+            self.save_stats()
+
     def game_won(self):
         self.stopped = True
-        #win_time = time.time() - self.time_offset
+        win_time = int(time.time() - self.time_offset)
         self.grab_input(self.stopped_callback)
         self.queue_redraw = True
+
+        self.stats.add_game_won(win_time)
+        self.save_stats()
 
     def stopped_callback(self, ch):
         if ch == ord('n'):
@@ -257,7 +322,7 @@ class FreeCellGame(object):
             ord('p'): self.toggle_pause,
             ord('q'): self.quit_game,
             ctrl('r'): self.redo,
-            #ctrl('s'): self.show_stats,
+            ord('S'): self.show_stats,
             ord('u'): self.undo,
 
             # Action inputs
@@ -461,12 +526,12 @@ class FreeCellGame(object):
         else:
             self.pause_game()
 
-    def pause_game(self):
+    def pause_game(self, grab = None, draw = None):
         if not self.paused:
             self.pause_time = time.time()
             self.paused = True
-            self.grab_input(self.pause_callback)
-            self.pause_draw_callback = None
+            self.grab_input(self.pause_callback if grab is None else grab)
+            self.pause_draw_callback = draw
             self.queue_redraw = True
 
     def pause_callback(self, ch):
@@ -523,7 +588,10 @@ class FreeCellGame(object):
         self.prompt_confirmation('Start a new game?', self.new_game)
 
     def new_game(self):
+        if not self.stopped:
+            self.stats.add_game()
         self.start_game()
+        self.save_stats()
         self.queue_redraw = True
 
     def confirm_quit_game(self):
@@ -533,11 +601,28 @@ class FreeCellGame(object):
         self.quit = True
 
     def show_stats(self):
-        self.pause_game()
-        self.pause_draw_callback = self.draw_stats
+        self.pause_game(self.stats_callback, self.draw_stats)
+
+    def stats_callback(self, ch):
+        if ch == ord('p') or ch == ctrl('['):
+            self.unpause_game()
+            return False
+        elif ch == ord('q'):
+            self.quit_game()
+            return False
+        elif ch == ord('c'):
+            self.stats.clear()
+            self.save_stats()
+            self.queue_redraw = True
+            return True
+
+        return True
+
+    def save_stats(self):
+        self.save_config(self.STATS_FILE, self.stats.save())
 
     def start_game(self):
-        self.freecell = fc = FreeCell(shuffled(make_deck()))
+        self.freecell = FreeCell(shuffled(make_deck()))
         self.paused = False
         self.stopped = False
         self.try_sweep = True
@@ -563,6 +648,24 @@ class FreeCellGame(object):
 
     def win_resized(self, *args):
         self.queue_redraw = True
+
+    def load_config(self, fname):
+        try:
+            with open(os.path.expanduser(fname), 'r') as f:
+                return json.load(f)
+        except IOError:
+            return {}
+
+    def save_config(self, fname, cfg):
+        try:
+            p = os.path.expanduser(fname)
+            os.makedirs(os.path.dirname(p), 0o755, exist_ok = True)
+
+            with open(p, 'w') as f:
+                json.dump(cfg, f)
+                f.write('\n')
+        except IOError as e:
+            self.set_message('Failed to save file: {}'.format(e))
 
 def ctrl(ch):
     return ord(ch) & 0x1f
