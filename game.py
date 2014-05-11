@@ -240,6 +240,7 @@ class FreeCellGame(object):
 
         self.key_callbacks = {
             ord(' '): self.clear_action,
+            ctrl('['): self.clear_action,
             ord('l'): self.begin_locate,
             ctrl('l'): self.redraw,
             ord('n'): self.confirm_new_game,
@@ -269,7 +270,7 @@ class FreeCellGame(object):
         self.grab_input(self.locate_callback)
 
     def locate_callback(self, ch):
-        if ch == ord(' '):
+        if ch == ord(' ') or ch == ctrl('['):
             self.clear_action()
             self.locate_match = None
             return False
