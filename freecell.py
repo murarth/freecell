@@ -44,6 +44,11 @@ class Card(object):
         self.face = face
         self.value = value
 
+    def __eq__(self, rhs):
+        if isinstance(rhs, Card):
+            return self.face == rhs.face and self.value == rhs.value
+        return NotImplemented
+
     @property
     def color(self):
         return self.COLORS[self.face]
@@ -76,6 +81,14 @@ class stack(object):
 
     def __len__(self):
         return len(self.li)
+
+    def __reversed__(self):
+        return reversed(self.li)
+
+    def copy(self):
+        s = stack.__new__(stack)
+        s.li = self.li[:]
+        return s
 
     def empty(self):
         return not self.li
@@ -115,21 +128,33 @@ class FreeCell(object):
         self.tableau = [stack() for i in range(self.TABLEAU_SLOTS)]
         self.fill_tableau(deck)
 
+    def copy(self):
+        fc = FreeCell.__new__(FreeCell)
+        fc.reserve = self.reserve[:]
+        fc.foundation = [s.copy() for s in self.foundation]
+        fc.tableau = [t.copy() for t in self.tableau]
+        return fc
+
     def fill_tableau(self, deck):
         slots = itertools.cycle(self.tableau)
         for c in deck:
             next(slots).push(c)
 
-    def sweep_tableau(self):
+    def sweep(self):
         '''
-        Sweeps every tableau slot and moves to foundation any card which meets
-        the following conditions:
+        Sweeps every tableau and reserve slot and moves to foundation
+        any card which meets the following conditions:
             It can be placed on foundation
             Any Card which may be placed on top may also be placed on foundation
-        All tableau slots are swept until no more cards can be moved
+        All slots are swept until no more cards can be moved
         '''
         while 1:
             moved = False
+
+            for i, r in enumerate(self.reserve):
+                if r is not None and self.should_move_to_foundation(r):
+                    self.move_to_foundation(self.move_from_reserve(i))
+                    moved = True
 
             for t in self.tableau:
                 if t and self.should_move_to_foundation(t.top()):
@@ -139,11 +164,42 @@ class FreeCell(object):
             if not moved:
                 break
 
+    def sweep_step(self, n = 1):
+        '''
+        Attempts to sweep only one card and returns whether it was successful
+        '''
+        success = False
+
+        for i, r in enumerate(self.reserve):
+            if r is not None and self.should_move_to_foundation(r):
+                self.move_to_foundation(self.move_from_reserve(i))
+                n -= 1
+                if n == 0:
+                    return True
+                success = True
+
+        for t in self.tableau:
+            if t and self.should_move_to_foundation(t.top()):
+                self.move_to_foundation(t.pop())
+                n -= 1
+                if n == 0:
+                    return True
+                success = True
+
+        return success
+
     def can_top(self, a, b):
         '''
         Returns whether Card a can be placed, on the tableau, on top of Card b
         '''
         return a.color != b.color and a.value == b.value - 1
+
+    def can_move_to_tableau(self, c, i):
+        '''
+        Returns whether the given Card c can be moved into tableau slot i
+        '''
+        t = self.tableau[i]
+        return t.empty() or self.can_top(c, t.top())
 
     def can_move_to_foundation(self, c):
         '''
@@ -167,23 +223,52 @@ class FreeCell(object):
         Returns whether the Card has been freed; that is, the Card is not
         contained in either reserve, foundation, or tableau
         '''
+        assert isinstance(c, Card)
         return c not in self.reserve and \
             all(c not in f for f in self.foundation) and \
             all(c not in t for t in self.tableau)
 
-    def move_capacity(self, to_empty = False):
+    def move_capacity(self, a, b):
         '''
-        Returns how large a contiguous stack of cards may moved,
-        accounting for free reserve slots and free tableau slots
+        Returns how large a contiguous stack of cards may moved from
+        tableau slot a to b, accounting for free reserve slots and free
+        tableau slots. If this is greater than the current number of
+        grouped cards in stack a, that value is returned instead.
 
-        A True value of to_empty indicates that move capacity to an empty
-        slot is being tested and therefore, effectively, there is one
-        fewer empty slot available for a contiguous move.
+        NOTE: This method does NOT check whether such a move is valid
+        based on the card on top of slot b.
         '''
-        if to_empty:
-            assert any(t.empty() for t in self.tableau)
+        if self.tableau[a].empty():
+            raise MoveFromEmpty
+        to_empty = (self.tableau[b].empty())
         empty_slots = sum(1 for t in self.tableau if t.empty())
-        return 1 + (self.reserve.count(None) * empty_slots - to_empty)
+        return min(self.count_group(a),
+            (1 + self.reserve.count(None)) * (empty_slots - to_empty + 1))
+
+    def count_group(self, i):
+        '''
+        Returns how many cards on top of slot i comprise a valid group
+        '''
+        t = self.tableau[i]
+        if t.empty():
+            return 0
+        if len(t) == 1:
+            return 1
+
+        n = 1
+
+        # From top of stack, iterate over adjacent pairs
+        r = reversed(t)
+        r2 = reversed(t)
+        next(r2)
+
+        for a, b in zip(r, r2):
+            if self.can_top(a, b):
+                n += 1
+            else:
+                break
+
+        return n
 
     def move_to_foundation(self, c):
         if not self.can_move_to_foundation(c):
@@ -191,14 +276,30 @@ class FreeCell(object):
 
         self.foundation[c.face_index].push(c)
 
-    def move_to_tableau(self, i, c):
+    def move_to_tableau(self, c, i):
+        '''
+        Moves the given Card c to tableau slot i
+        '''
         assert self.is_free(c)
 
-        t = self.tableau[i]
-        if t and not self.can_top(c, t.top()):
+        if not self.can_move_to_tableau(c, i):
             raise InvalidMove
 
-        t.push(c)
+        self.tableau[i].push(c)
+
+    def move_tableau_group(self, a, b, n):
+        '''
+        Moves n cards from tableau slot a to b
+        '''
+        if n == 0:
+            raise InvalidMove
+        if n > self.move_capacity(a, b):
+            raise InvalidMove
+
+        ta = self.tableau[a]
+
+        cards = [ta.pop() for i in range(n)]
+        [self.move_to_tableau(c, b) for c in reversed(cards)]
 
     def move_to_reserve(self, c):
         assert self.is_free(c)
