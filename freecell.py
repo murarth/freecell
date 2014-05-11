@@ -57,9 +57,13 @@ class Card(object):
     def face_char(self):
         return self.FACE_CHARS[self.face]
 
+    @classmethod
+    def get_index(cls, face):
+        return cls.FACES.index(face)
+
     @property
     def face_index(self):
-        return self.FACES.index(self.face)
+        return self.get_index(self.face)
 
     @property
     def name(self):
@@ -169,24 +173,23 @@ class FreeCell(object):
         Attempts to sweep only one card and returns whether it was successful
         '''
         success = False
+        left = n
 
         for i, r in enumerate(self.reserve):
             if r is not None and self.should_move_to_foundation(r):
                 self.move_to_foundation(self.move_from_reserve(i))
-                n -= 1
-                if n == 0:
+                left -= 1
+                if left <= 0:
                     return True
-                success = True
 
         for t in self.tableau:
             if t and self.should_move_to_foundation(t.top()):
                 self.move_to_foundation(t.pop())
-                n -= 1
-                if n == 0:
+                left -= 1
+                if left <= 0:
                     return True
-                success = True
 
-        return success
+        return left != n
 
     def can_top(self, a, b):
         '''
@@ -213,10 +216,27 @@ class FreeCell(object):
         Returns whether the given Card should be moved to foundation in a
         sweep operation
         '''
-        return self.can_move_to_foundation(c) and \
-            not any(self.can_top(i, c) and not self.can_move_to_foundation(i)
-                for t in self.tableau
-                    for i in t)
+        if not self.can_move_to_foundation(c):
+            return False
+
+        def get_value(idx):
+            f = self.foundation[idx]
+            return 0 if f.empty() else f.top().value
+
+        min_black = min(
+            get_value(Card.get_index('spade')),
+            get_value(Card.get_index('club')))
+
+        min_red = min(
+            get_value(Card.get_index('heart')),
+            get_value(Card.get_index('diamond')))
+
+        if c.color == 'black':
+            auto_black = min(min_black + 3, min_red + 2)
+            return c.value <= auto_black
+        else:
+            auto_red = min(min_black + 2, min_red + 3)
+            return c.value <= auto_red
 
     def is_free(self, c):
         '''
@@ -243,7 +263,7 @@ class FreeCell(object):
         to_empty = (self.tableau[b].empty())
         empty_slots = sum(1 for t in self.tableau if t.empty())
         return min(self.count_group(a),
-            (1 + self.reserve.count(None)) * (empty_slots - to_empty + 1))
+            (1 + self.reserve.count(None)) * 2 ** (empty_slots - to_empty))
 
     def count_group(self, i):
         '''

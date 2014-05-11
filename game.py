@@ -211,7 +211,17 @@ class FreeCellGame(object):
     def game_won(self):
         self.stopped = True
         #win_time = time.time() - self.time_offset
+        self.grab_input(self.stopped_callback)
         self.queue_redraw = True
+
+    def stopped_callback(self, ch):
+        if ch == ord('n'):
+            self.new_game()
+            return False
+        elif ch == ord('q'):
+            self.quit_game()
+            return False
+        return True
 
     def after_tick(self):
         if self.message_timeout and self.message_timeout <= time.time():
@@ -452,7 +462,7 @@ class FreeCellGame(object):
             self.pause_game()
 
     def pause_game(self):
-        if not (self.paused or self.stopped):
+        if not self.paused:
             self.pause_time = time.time()
             self.paused = True
             self.grab_input(self.pause_callback)
