@@ -401,9 +401,13 @@ class FreeCellGame(object):
 
         state = self.copy_state()
 
-        if self.handle_action():
+        handled, acted = self.handle_action()
+
+        if acted:
             self.try_sweep = True
             self.push_undo(state)
+            return False
+        elif handled:
             return False
 
         if not self.grab_input_callback:
@@ -428,6 +432,7 @@ class FreeCellGame(object):
 
         fc = self.freecell
         handled = False
+        acted = False
 
         if act[0] == 'reserve':
             if ln > 1:
@@ -445,14 +450,14 @@ class FreeCellGame(object):
                                 handled = True
                                 self.set_message('Cannot move to foundation')
                             else:
-                                handled = True
+                                acted = handled = True
                                 fc.move_to_foundation(fc.move_from_reserve(res_n))
                         elif isinstance(act[2], int):
                             if not fc.can_move_to_tableau(fc.reserve[res_n], act[2]):
                                 handled = True
                                 self.set_message('Cannot move to tableau')
                             else:
-                                handled = True
+                                acted = handled = True
                                 fc.move_to_tableau(fc.move_from_reserve(res_n), act[2])
                         else:
                             handled = True
@@ -477,14 +482,14 @@ class FreeCellGame(object):
                         handled = True
                         self.set_message('No free reserve slots')
                     else:
-                        handled = True
+                        acted = handled = True
                         fc.move_to_reserve(fc.tableau[tab_n].pop())
                 elif act[1] == 'foundation':
                     if not fc.can_move_to_foundation(fc.tableau[tab_n].top()):
                         handled = True
                         self.set_message('Cannot move to foundation')
                     else:
-                        handled = True
+                        acted = handled = True
                         fc.move_to_foundation(fc.tableau[tab_n].pop())
                 elif isinstance(act[1], int):
                     dest_n = act[1]
@@ -493,14 +498,14 @@ class FreeCellGame(object):
                             handled = True
                             self.set_message('No free reserve slots')
                         else:
-                            handled = True
+                            acted = handled = True
                             fc.move_to_reserve(fc.tableau[tab_n].pop())
                     elif dest_n not in range(fc.TABLEAU_SLOTS):
                         handled = True
                         self.set_message('Invalid tableau slot')
                     else:
                         handled = True
-                        self.tableau_move(tab_n, dest_n)
+                        acted = self.tableau_move(tab_n, dest_n)
         else:
             self.clear_action()
             self.set_message('Invalid action')
@@ -508,7 +513,7 @@ class FreeCellGame(object):
         if handled:
             self.clear_action()
 
-        return handled
+        return handled, acted
 
     def tableau_move(self, src, dest):
         fc = self.freecell
