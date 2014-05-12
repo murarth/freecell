@@ -49,6 +49,12 @@ class Card(object):
             return self.face == rhs.face and self.value == rhs.value
         return NotImplemented
 
+    def __repr__(self):
+        return 'Card({!r}, {!r})'.format(self.face, self.value)
+
+    def __str__(self):
+        return '<Card {} {}>'.format(self.face_char, self.name)
+
     @property
     def color(self):
         return self.COLORS[self.face]

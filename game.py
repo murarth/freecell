@@ -18,6 +18,8 @@ class Stats(object):
         self.games_played = cfg.get('games', 0)
         self.games_won = cfg.get('won', 0)
         self.total_time = cfg.get('total_time', 0)
+        self.lowest_time = cfg.get('lowest_time', 0)
+        self.highest_time = cfg.get('highest_time', 0)
 
     def add_game(self):
         self.games_played += 1
@@ -26,6 +28,10 @@ class Stats(object):
         self.games_played += 1
         self.games_won += 1
         self.total_time += t
+        if self.lowest_time == 0 or t < self.lowest_time:
+            self.lowest_time = t
+        if t > self.highest_time:
+            self.highest_time = t
 
     def get_average_time(self):
         if self.games_won == 0:
@@ -36,12 +42,16 @@ class Stats(object):
         self.games_played = 0
         self.games_won = 0
         self.total_time = 0
+        self.lowest_time = 0
+        self.highest_time = 0
 
     def save(self):
         return {
             'games': self.games_played,
             'won': self.games_won,
             'total_time': self.total_time,
+            'lowest_time': self.lowest_time,
+            'highest_time': self.highest_time,
         }
 
 class FreeCellGame(object):
@@ -229,6 +239,8 @@ class FreeCellGame(object):
             'Games played: {:>5}'.format(stats.games_played),
             'Games won:    {:>5}'.format(stats.games_won),
             'Average time: {:>5}'.format(self.time_str(stats.get_average_time())),
+            'Lowest time:  {:>5}'.format(self.time_str(stats.lowest_time)),
+            'Highest time: {:>5}'.format(self.time_str(stats.highest_time)),
         ]
 
         starty = (y - (len(lines) + 4)) // 2
