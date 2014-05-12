@@ -6,7 +6,6 @@ from functools import partial
 import itertools
 import json
 import os
-import select
 import signal
 import sys
 import time
@@ -51,8 +50,9 @@ class FreeCellGame(object):
 
     def __init__(self, stdscr):
         self.stdscr = stdscr
-        self.action_input = []
         self.action_display = []
+        self.action_input = []
+        self.action_keys = set()
         # Grabs input; returns True to keep grabbing
         self.grab_input_callback = None
         self.locate_match = None
@@ -259,10 +259,7 @@ class FreeCellGame(object):
                 self.draw_clock(*self.stdscr.getmaxyx())
                 self.refresh()
 
-            rd, _, _ = select.select([sys.stdin], [], [], 0.1)
-
-            if rd:
-                self.handle_input()
+            self.handle_input()
 
             self.after_tick()
 
@@ -309,7 +306,7 @@ class FreeCellGame(object):
                     cb()
 
     def init_ui(self):
-        self.stdscr.nodelay(True)
+        self.stdscr.timeout(100)
         curses.noecho()
         signal.signal(signal.SIGWINCH, self.win_resized)
 
@@ -336,6 +333,11 @@ class FreeCellGame(object):
             ord('h'): partial(self.action, 5, 'H'),
             ord('j'): partial(self.action, 6, 'J'),
             ord('k'): partial(self.action, 7, 'K'),
+        }
+
+        self.action_keys = {
+            ord('r'), ord('t'), ord('a'), ord('s'), ord('d'),
+            ord('f'), ord('g'), ord('h'), ord('j'), ord('k'),
         }
 
     def begin_locate(self):
@@ -402,6 +404,20 @@ class FreeCellGame(object):
         if self.handle_action():
             self.try_sweep = True
             self.push_undo(state)
+            return False
+
+        if not self.grab_input_callback:
+            self.grab_input(self.action_callback)
+
+        return True
+
+    def action_callback(self, ch):
+        if ch in self.action_keys:
+            return self.key_callbacks[ch]()
+        elif ch == ctrl('[') or ch == ord(' '):
+            self.clear_action()
+            return False
+        return True
 
     def handle_action(self):
         act = self.action_input
@@ -412,7 +428,6 @@ class FreeCellGame(object):
 
         fc = self.freecell
         handled = False
-        acted = False
 
         if act[0] == 'reserve':
             if ln > 1:
@@ -430,14 +445,14 @@ class FreeCellGame(object):
                                 handled = True
                                 self.set_message('Cannot move to foundation')
                             else:
-                                acted = handled = True
+                                handled = True
                                 fc.move_to_foundation(fc.move_from_reserve(res_n))
                         elif isinstance(act[2], int):
                             if not fc.can_move_to_tableau(fc.reserve[res_n], act[2]):
                                 handled = True
                                 self.set_message('Cannot move to tableau')
                             else:
-                                acted = handled = True
+                                handled = True
                                 fc.move_to_tableau(fc.move_from_reserve(res_n), act[2])
                         else:
                             handled = True
@@ -462,14 +477,14 @@ class FreeCellGame(object):
                         handled = True
                         self.set_message('No free reserve slots')
                     else:
-                        acted = handled = True
+                        handled = True
                         fc.move_to_reserve(fc.tableau[tab_n].pop())
                 elif act[1] == 'foundation':
                     if not fc.can_move_to_foundation(fc.tableau[tab_n].top()):
                         handled = True
                         self.set_message('Cannot move to foundation')
                     else:
-                        acted = handled = True
+                        handled = True
                         fc.move_to_foundation(fc.tableau[tab_n].pop())
                 elif isinstance(act[1], int):
                     dest_n = act[1]
@@ -478,14 +493,14 @@ class FreeCellGame(object):
                             handled = True
                             self.set_message('No free reserve slots')
                         else:
-                            acted = handled = True
+                            handled = True
                             fc.move_to_reserve(fc.tableau[tab_n].pop())
                     elif dest_n not in range(fc.TABLEAU_SLOTS):
                         handled = True
                         self.set_message('Invalid tableau slot')
                     else:
                         handled = True
-                        acted = self.tableau_move(tab_n, dest_n)
+                        self.tableau_move(tab_n, dest_n)
         else:
             self.clear_action()
             self.set_message('Invalid action')
@@ -493,7 +508,7 @@ class FreeCellGame(object):
         if handled:
             self.clear_action()
 
-        return acted
+        return handled
 
     def tableau_move(self, src, dest):
         fc = self.freecell
