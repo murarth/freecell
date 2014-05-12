@@ -266,7 +266,7 @@ class FreeCellGame(object):
 
             self.after_tick()
 
-        if not self.stopped:
+        if not self.stopped and self.undo_list:
             self.stats.add_game()
             self.save_stats()
 
@@ -588,7 +588,7 @@ class FreeCellGame(object):
         self.prompt_confirmation('Start a new game?', self.new_game)
 
     def new_game(self):
-        if not self.stopped:
+        if not self.stopped and self.undo_list:
             self.stats.add_game()
         self.start_game()
         self.save_stats()
