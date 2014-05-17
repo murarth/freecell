@@ -302,20 +302,19 @@ class FreeCellGame(object):
             self.clear_message()
 
     def handle_input(self):
-        while 1:
-            ch = self.stdscr.getch()
+        ch = self.stdscr.getch()
 
-            if ch == -1:
-                break
+        if ch == -1:
+            return
 
-            if self.grab_input_callback is not None:
-                if not self.grab_input_callback(ch):
-                    self.grab_input_callback = None
-            else:
-                cb = self.key_callbacks.get(ch)
+        if self.grab_input_callback is not None:
+            if not self.grab_input_callback(ch):
+                self.grab_input_callback = None
+        else:
+            cb = self.key_callbacks.get(ch)
 
-                if cb:
-                    cb()
+            if cb:
+                cb()
 
     def init_ui(self):
         self.stdscr.timeout(100)
