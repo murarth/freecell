@@ -98,8 +98,8 @@ class FreeCellGame(object):
             attr |= curses.A_REVERSE
         return '{} {:>2}'.format(c.face_char, c.name), attr
 
-    def grab_input(self, cb):
-        if self.grab_input_callback is not None:
+    def grab_input(self, cb, force = False):
+        if not force and self.grab_input_callback is not None:
             raise Exception('Input is already grabbed')
         self.grab_input_callback = cb
 
@@ -261,7 +261,7 @@ class FreeCellGame(object):
         self.start_game()
 
         while not self.quit:
-            if self.try_sweep:
+            if not self.paused and self.try_sweep:
                 self.sweep_step()
 
             if self.queue_redraw:
@@ -280,9 +280,12 @@ class FreeCellGame(object):
             self.save_stats()
 
     def game_won(self):
+        self.paused = False
         self.stopped = True
+        self.try_sweep = False
         win_time = int(time.time() - self.time_offset)
-        self.grab_input(self.stopped_callback)
+        self.clear_action()
+        self.grab_input(self.stopped_callback, force = True)
         self.queue_redraw = True
 
         self.stats.add_game_won(win_time)
