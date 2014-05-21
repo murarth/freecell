@@ -38,6 +38,11 @@ class Stats(object):
             return 0
         return self.total_time // self.games_won
 
+    def get_win_rate(self):
+        if self.games_played == 0:
+            return 0
+        return self.games_won * 100 // self.games_played
+
     def clear(self):
         self.games_played = 0
         self.games_won = 0
@@ -238,6 +243,8 @@ class FreeCellGame(object):
         lines = [
             'Games played: {:>5}'.format(stats.games_played),
             'Games won:    {:>5}'.format(stats.games_won),
+            'Win rate:     {:>4}%'.format(stats.get_win_rate()),
+            '',
             'Average time: {:>5}'.format(self.time_str(stats.get_average_time())),
             'Lowest time:  {:>5}'.format(self.time_str(stats.lowest_time)),
             'Highest time: {:>5}'.format(self.time_str(stats.highest_time)),
