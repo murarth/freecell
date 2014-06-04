@@ -125,7 +125,9 @@ class FreeCellGame(object):
 
     def set_message(self, msg, timeout = 1):
         self.message = msg
-        if timeout:
+        if timeout is None:
+            self.message_timeout = None
+        else:
             self.message_timeout = time.time() + timeout
         self.queue_redraw = True
 
