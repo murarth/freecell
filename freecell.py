@@ -104,7 +104,7 @@ class stack(object):
         return not self.li
 
     def pop(self):
-        return self.li.pop(-1)
+        return self.li.pop()
 
     def push(self, item):
         self.li.append(item)

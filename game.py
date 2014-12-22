@@ -68,8 +68,7 @@ class FreeCellGame(object):
         self.action_display = []
         self.action_input = []
         self.action_keys = set()
-        # Grabs input; returns True to keep grabbing
-        self.grab_input_callback = None
+        self.grab_input_callbacks = []
         self.locate_match = None
         self.message = None
         self.message_timeout = None
@@ -85,7 +84,7 @@ class FreeCellGame(object):
 
     def repr_card(self, c):
         '''
-        Returns a two-tuple (card string, curses attr)
+        Returns a two-tuple (card string, curses attr) for a Card
         '''
         attr = 0
         if c.color == 'red':
@@ -95,6 +94,11 @@ class FreeCellGame(object):
         return '{} {:>2}'.format(c.face_char, c.name), attr
 
     def repr_stack(self, s):
+        '''
+        Returns a two-tuple (card string, curses attr) for a stack of cards.
+        The top card is rendered normally, but highlighting is applied if
+        any cards in the stack match.
+        '''
         attr = 0
         c = s.top()
         if c.color == 'red':
@@ -103,27 +107,53 @@ class FreeCellGame(object):
             attr |= curses.A_REVERSE
         return '{} {:>2}'.format(c.face_char, c.name), attr
 
-    def grab_input(self, cb, force = False):
-        if not force and self.grab_input_callback is not None:
-            raise Exception('Input is already grabbed')
-        self.grab_input_callback = cb
+    def clear_grab(self):
+        '''
+        Remove all grab_input callbacks
+        '''
+        del self.grab_input_callbacks[:]
+
+    def grab_input(self, cb):
+        '''
+        Registers a callback to preferentially receive user input.
+        The callback takes a single argument, the character input value.
+        It returns a boolean: True to maintain input grab; False to remove
+        itself from the grab list.
+        '''
+        self.grab_input_callbacks.append(cb)
 
     def prompt_confirmation(self, msg, cb):
+        '''
+        Prompts for a yes or no response. If input 'y' is received,
+        the given callback is called with no arguments. If any other
+        input is received, input grab is released and nothing is called.
+        '''
         self.set_message(msg + ' (y/n)', None)
         self.grab_input(partial(self.confirm_callback, cb = cb))
 
     def confirm_callback(self, ch, cb):
+        '''
+        Input grab callback used by prompt_confirmation.
+        '''
         if ch == ord('y'):
             cb()
         self.clear_message()
         return False
 
     def clear_message(self):
+        '''
+        Clears message line
+        '''
         self.message = None
         self.message_timeout = None
         self.queue_redraw = True
 
     def set_message(self, msg, timeout = 1):
+        '''
+        Sets a message to display for the given timeout, in seconds.
+        If timeout is None, the message will be displayed until clear_message
+        is called.
+        '''
         self.message = msg
         if timeout is None:
             self.message_timeout = None
@@ -132,6 +162,9 @@ class FreeCellGame(object):
         self.queue_redraw = True
 
     def draw(self):
+        '''
+        Draws the contents of the screen
+        '''
         win = self.stdscr
 
         y, x = win.getmaxyx()
@@ -151,15 +184,19 @@ class FreeCellGame(object):
         self.refresh()
 
     def draw_field(self, y, x):
+        '''
+        Draws playing field containing cards and slots
+        '''
         fc = self.freecell
         win = self.stdscr
 
+        # draw_centered would be easier, but this line contains attributes
         win.move(2, (x - ((4 * 5 + 5) * 2 + 1)) // 2)
-        #                 |   |    |    |   ` Plus separator
-        #                 |   |    |    ` On each side
-        #                 |   |    ` Plus surrounding [] and key
-        #                 |   ` Five chars wide (including space in between)
-        #                 ` Four cards
+        #                  |   |   |    |   ` Plus separator
+        #                  |   |   |    ` On each side
+        #                  |   |   ` Plus surrounding [] and key
+        #                  |   ` Five chars wide (including space in between)
+        #                  ` Four cards
 
         win.addstr('R [ ')
 
@@ -205,9 +242,11 @@ class FreeCellGame(object):
                 win.addstr('  ')
 
     def time_str(self, sec):
+        '''Returns a string "minutes:seconds" for the given duration, in seconds'''
         return '{:d}:{:02d}'.format(*divmod(int(sec), 60))
 
     def draw_clock(self, y, x):
+        '''Draws the timer on the screen'''
         if self.paused:
             t = int(self.pause_time - self.time_offset)
         else:
@@ -216,6 +255,7 @@ class FreeCellGame(object):
         self.stdscr.addstr(0, x - len(s) - 2, s, curses.A_REVERSE)
 
     def draw_message(self, y, x):
+        '''Draws message and action input'''
         win = self.stdscr
         if self.action_display:
             action = self.action_display
@@ -226,6 +266,7 @@ class FreeCellGame(object):
             win.addstr(y - 1, 0, self.message, curses.A_BOLD)
 
     def draw_pause(self, y, x):
+        '''Draws the pause screen'''
         if self.pause_draw_callback is None:
             s = 'Paused'
             self.draw_centered(y // 2, x, s)
@@ -233,13 +274,19 @@ class FreeCellGame(object):
             self.pause_draw_callback(y, x)
 
     def draw_stopped(self, y, x):
+        '''Draws the game over screen'''
         s = 'You won!'
         self.draw_centered(y // 2, x, s, curses.A_BOLD)
 
     def draw_centered(self, y, x, s, attr = 0):
+        '''
+        Draws a string centered on the screen.
+        y is line to draw, x is the max x value of the screen.
+        '''
         self.stdscr.addstr(y, (x - len(s)) // 2, s, attr)
 
     def draw_stats(self, y, x):
+        '''Draws stats screen'''
         stats = self.stats
 
         lines = [
@@ -262,6 +309,7 @@ class FreeCellGame(object):
         self.draw_centered(starty + len(lines) + 3, x, "Press 'c' to clear")
 
     def draw_title(self, y, x):
+        '''Draws the title to the screen'''
         self.stdscr.addstr(0, 0, 'FreeCell')
         self.stdscr.chgat(0, 0, x, curses.A_REVERSE)
 
@@ -289,12 +337,14 @@ class FreeCellGame(object):
             self.save_stats()
 
     def game_won(self):
+        '''Called when the game has been won'''
         self.paused = False
         self.stopped = True
         self.try_sweep = False
         win_time = int(time.time() - self.time_offset)
         self.clear_action()
-        self.grab_input(self.stopped_callback, force = True)
+        self.clear_grab()
+        self.grab_input(self.stopped_callback)
         self.queue_redraw = True
 
         self.stats.add_game_won(win_time)
@@ -319,9 +369,10 @@ class FreeCellGame(object):
         if ch == -1:
             return
 
-        if self.grab_input_callback is not None:
-            if not self.grab_input_callback(ch):
-                self.grab_input_callback = None
+        if self.grab_input_callbacks:
+            cb = self.grab_input_callbacks[-1]
+            if not cb(ch):
+                self.grab_input_callbacks.pop()
         else:
             cb = self.key_callbacks.get(ch)
 
@@ -406,6 +457,7 @@ class FreeCellGame(object):
         return True
 
     def highlight(self, c):
+        '''Returns whether the given card should be highlighted'''
         m = self.locate_match
         if m is not None:
             self.queue_redraw = True
@@ -418,6 +470,7 @@ class FreeCellGame(object):
         self.queue_redraw = True
 
     def action(self, a, text):
+        grab = not self.action_input
         self.action_input.append(a)
         self.action_display.append(text)
         self.queue_redraw = True
@@ -433,7 +486,7 @@ class FreeCellGame(object):
         elif handled:
             return False
 
-        if not self.grab_input_callback:
+        if grab:
             self.grab_input(self.action_callback)
 
         return True
@@ -647,19 +700,21 @@ class FreeCellGame(object):
         self.pause_game(self.stats_callback, self.draw_stats)
 
     def stats_callback(self, ch):
-        if ch == ord('p') or ch == ctrl('['):
+        if ch in { ord('p'), ord(' '), ctrl('[') }:
             self.unpause_game()
             return False
         elif ch == ord('q'):
             self.quit_game()
             return False
         elif ch == ord('c'):
-            self.stats.clear()
-            self.save_stats()
-            self.queue_redraw = True
-            return True
+            self.prompt_confirmation('Clear stats?', self.clear_stats)
 
         return True
+
+    def clear_stats(self):
+        self.stats.clear()
+        self.save_stats()
+        self.queue_redraw = True
 
     def save_stats(self):
         self.save_config(self.STATS_FILE, self.stats.save())
