@@ -170,18 +170,23 @@ class FreeCellGame(object):
         y, x = win.getmaxyx()
         win.clear()
 
-        self.draw_title(y, x)
-        self.draw_clock(y, x)
+        try:
+            self.draw_title(y, x)
+            self.draw_clock(y, x)
 
-        if self.paused:
-            self.draw_pause(y, x)
-        elif self.stopped:
-            self.draw_stopped(y, x)
-        else:
-            self.draw_field(y, x)
+            if self.paused:
+                self.draw_pause(y, x)
+            elif self.stopped:
+                self.draw_stopped(y, x)
+            else:
+                self.draw_field(y, x)
 
-        self.draw_message(y, x)
-        self.refresh()
+            self.draw_message(y, x)
+            self.refresh()
+        except curses.error as e:
+            msg = 'Screen is too small'
+            self.draw_line(y - 1, 0, msg[:x], curses.A_BOLD)
+            win.refresh()
 
     def draw_field(self, y, x):
         '''
@@ -284,6 +289,41 @@ class FreeCellGame(object):
         y is line to draw, x is the max x value of the screen.
         '''
         self.stdscr.addstr(y, (x - len(s)) // 2, s, attr)
+
+    def draw_line(self, y, x, s, attr = 0):
+        self.stdscr.addstr(y, x, s, attr)
+
+    def draw_help(self, y, x):
+        '''Draw help screen'''
+
+        lines = [
+            '?            Show this help screen',
+            'Q            Quit the game (requires confirmation)',
+            'P            Pause or unpause the game',
+            'S            Show game stats',
+            'L            Start card lookup (Esc or Space to end)',
+            'R or B       Search for a Red or Black card',
+            '0-9, J, Q, K Search for a card value (0 means 10)',
+            '',
+            'Esc or Space Cancel an action',
+            'U            Undo an action',
+            'Ctrl-R       Redo an action',
+            'A-K          Reference a slot on the tableau',
+            'R, then A-F  Reference a slot on the reserve',
+            'T            Reference the foundation',
+            '',
+            'To move a card, reference the source slot,',
+            '  then the destination slot.',
+            'Pressing tableau key twice moves to reserve.',
+        ]
+
+        starty = (y - (len(lines) + 2)) // 2
+        startx = (x - max(map(len, lines))) // 2
+
+        self.draw_centered(starty, x, 'HELP', curses.A_BOLD)
+
+        for i, s in enumerate(lines, 2):
+            self.draw_line(starty + i, startx, s)
 
     def draw_stats(self, y, x):
         '''Draws stats screen'''
@@ -391,10 +431,11 @@ class FreeCellGame(object):
             ctrl('l'): self.redraw,
             ord('n'): self.confirm_new_game,
             ord('p'): self.toggle_pause,
-            ord('q'): self.quit_game,
+            ord('q'): self.confirm_quit_game,
             ctrl('r'): self.redo,
             ord('S'): self.show_stats,
             ord('u'): self.undo,
+            ord('?'): self.show_help,
 
             # Action inputs
             ord('r'): partial(self.action, 'reserve', 'R'),
@@ -696,16 +737,27 @@ class FreeCellGame(object):
     def quit_game(self):
         self.quit = True
 
+    def show_help(self):
+        self.pause_game(self.help_callback, self.draw_help)
+
     def show_stats(self):
         self.pause_game(self.stats_callback, self.draw_stats)
+
+    def help_callback(self, ch):
+        if ch in { ord('p'), ord(' '), ctrl('[') }:
+            self.unpause_game()
+            return False
+        elif ch == ord('q'):
+            self.confirm_quit_game()
+
+        return True
 
     def stats_callback(self, ch):
         if ch in { ord('p'), ord(' '), ctrl('[') }:
             self.unpause_game()
             return False
         elif ch == ord('q'):
-            self.quit_game()
-            return False
+            self.confirm_quit_game()
         elif ch == ord('c'):
             self.prompt_confirmation('Clear stats?', self.clear_stats)
 
@@ -745,6 +797,8 @@ class FreeCellGame(object):
         self.stdscr.refresh()
 
     def win_resized(self, *args):
+        curses.endwin()
+        curses.initscr()
         self.queue_redraw = True
 
     def load_config(self, fname):
