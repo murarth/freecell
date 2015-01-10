@@ -676,8 +676,7 @@ class FreeCellGame(object):
             self.unpause_game()
             return False
         elif ch == ord('q'):
-            self.quit_game()
-            return False
+            self.confirm_quit_game()
 
         return True
 
