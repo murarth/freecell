@@ -193,15 +193,6 @@ class Game(object):
 
         self.end_game()
 
-    def stopped_callback(self, ch):
-        if ch == ord('n'):
-            self.new_game()
-            return False
-        elif ch == ord('q'):
-            self.quit_game()
-            return False
-        return True
-
     def after_tick(self):
         if self.message_timeout and self.message_timeout <= time.time():
             self.clear_message()

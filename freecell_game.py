@@ -548,6 +548,14 @@ class FreeCellGame(Game):
 
         return True
 
+    def stopped_callback(self, ch):
+        if ch == ord('n'):
+            self.new_game()
+            return False
+        elif ch == ord('q'):
+            self.confirm_quit_game()
+        return True
+
     def clear_stats(self):
         self.stats.clear()
         self.save_stats()
