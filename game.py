@@ -14,16 +14,9 @@ __all__ = [
 def ctrl(ch):
     return ord(ch) & 0x1f
 
-def init_colors():
-    curses.start_color()
-    curses.use_default_colors()
-
-    curses.init_pair(1, curses.COLOR_RED, -1)
-
 def main(game_class):
     stdscr = curses.initscr()
     try:
-        init_colors()
         game_class(stdscr).go()
     finally:
         curses.endwin()
@@ -128,18 +121,18 @@ class Game(object):
     def draw_field(self, y, x):
         raise NotImplementedError
 
-    def time_str(self, sec):
-        '''Returns a string "minutes:seconds" for the given duration, in seconds'''
-        return '{:d}:{:02d}'.format(*divmod(int(sec), 60))
+    def time_str(self):
+        '''Returns a string "minutes:seconds" for the current timer'''
+        if self.paused:
+            t = self.pause_time - self.time_offset
+        else:
+            t = time.time() - self.time_offset
+        return '{:d}:{:02d}'.format(*divmod(int(t), 60))
 
     def draw_clock(self, y, x):
         '''Draws the timer on the screen'''
-        if self.paused:
-            t = int(self.pause_time - self.time_offset)
-        else:
-            t = int(time.time() - self.time_offset)
-        s = self.time_str(t)
-        self.stdscr.addstr(0, x - len(s) - 2, s, curses.A_REVERSE)
+        s = self.time_str()
+        self.stdscr.addstr(0, x - len(s) - 1, s, curses.A_REVERSE)
 
     def draw_message(self, y, x):
         '''Draws message'''
@@ -170,7 +163,7 @@ class Game(object):
 
     def draw_title(self, y, x):
         '''Draws the title to the screen'''
-        self.stdscr.addstr(0, 0, self.GAME_TITLE)
+        self.stdscr.addstr(0, 1, self.GAME_TITLE)
         self.stdscr.chgat(0, 0, x, curses.A_REVERSE)
 
     def go(self):
@@ -220,8 +213,14 @@ class Game(object):
 
     def init_ui(self):
         self.stdscr.timeout(100)
+        curses.curs_set(0)
         curses.noecho()
         signal.signal(signal.SIGWINCH, self.win_resized)
+        self.init_colors()
+
+    def init_colors(self):
+        curses.start_color()
+        curses.use_default_colors()
 
     def toggle_pause(self):
         if self.paused:
@@ -271,8 +270,6 @@ class Game(object):
         self.queue_redraw = True
 
     def refresh(self):
-        y, x = self.stdscr.getmaxyx()
-        self.stdscr.move(0, x - 1)
         self.stdscr.refresh()
 
     def win_resized(self, *args):

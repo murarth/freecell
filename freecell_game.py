@@ -107,6 +107,10 @@ class FreeCellGame(Game):
             ord('f'), ord('g'), ord('h'), ord('j'), ord('k'),
         }
 
+    def init_colors(self):
+        super().init_colors()
+        curses.init_pair(1, curses.COLOR_RED, -1)
+
     def repr_card(self, c):
         '''
         Returns a two-tuple (card string, curses attr) for a Card
@@ -206,6 +210,7 @@ class FreeCellGame(Game):
         lines = [
             '?            Show this help screen',
             'Q            Quit the game (requires confirmation)',
+            'N            Start a new game',
             'P            Pause or unpause the game',
             'S            Show game stats',
             'L            Start card lookup (Esc or Space to end)',
@@ -224,7 +229,7 @@ class FreeCellGame(Game):
             'Pressing tableau key twice moves to reserve.',
         ]
 
-        starty = (y - (len(lines) + 2)) // 2
+        starty = max(1, (y - (len(lines) + 2)) // 2)
         startx = (x - max(map(len, lines))) // 2
 
         self.draw_centered(starty, x, 'HELP', curses.A_BOLD)
