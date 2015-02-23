@@ -7,7 +7,7 @@ import signal
 import time
 
 __all__ = [
-    'ctrl', 'main',
+    'ctrl', 'main', 'time_str',
     'Game',
 ]
 
@@ -20,6 +20,10 @@ def main(game_class):
         game_class(stdscr).go()
     finally:
         curses.endwin()
+
+def time_str(sec):
+    '''Returns a string "minutes:seconds" for the given time, in seconds'''
+    return '{:d}:{:02d}'.format(*divmod(int(sec), 60))
 
 class Game(object):
 
@@ -121,17 +125,17 @@ class Game(object):
     def draw_field(self, y, x):
         raise NotImplementedError
 
-    def time_str(self):
+    def timer_str(self):
         '''Returns a string "minutes:seconds" for the current timer'''
         if self.paused:
             t = self.pause_time - self.time_offset
         else:
             t = time.time() - self.time_offset
-        return '{:d}:{:02d}'.format(*divmod(int(t), 60))
+        return time_str(t)
 
     def draw_clock(self, y, x):
         '''Draws the timer on the screen'''
-        s = self.time_str()
+        s = self.timer_str()
         self.stdscr.addstr(0, x - len(s) - 1, s, curses.A_REVERSE)
 
     def draw_message(self, y, x):

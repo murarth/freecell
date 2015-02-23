@@ -246,9 +246,9 @@ class FreeCellGame(Game):
             'Games won:    {:>5}'.format(stats.games_won),
             'Win rate:     {:>4}%'.format(stats.get_win_rate()),
             '',
-            'Average time: {:>5}'.format(self.time_str(stats.get_average_time())),
-            'Lowest time:  {:>5}'.format(self.time_str(stats.lowest_time)),
-            'Highest time: {:>5}'.format(self.time_str(stats.highest_time)),
+            'Average time: {:>5}'.format(time_str(stats.get_average_time())),
+            'Lowest time:  {:>5}'.format(time_str(stats.lowest_time)),
+            'Highest time: {:>5}'.format(time_str(stats.highest_time)),
         ]
 
         starty = (y - (len(lines) + 4)) // 2
