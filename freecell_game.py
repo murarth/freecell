@@ -278,6 +278,7 @@ class FreeCellGame(Game):
         win_time = int(time.time() - self.time_offset)
         self.clear_action()
         self.clear_grab()
+        self.clear_message()
         self.grab_input(self.stopped_callback)
         self.queue_redraw = True
 
