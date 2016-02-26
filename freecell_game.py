@@ -213,9 +213,11 @@ class FreeCellGame(Game):
             'N            Start a new game',
             'P            Pause or unpause the game',
             'S            Show game stats',
+            '',
             'L            Start card lookup (Esc or Space to end)',
             'R or B       Search for a Red or Black card',
-            '0-9, J, Q, K Search for a card value (0 means 10)',
+            '0-9 J Q K A  Search for a card value (0 means 10)',
+            'L again      Search for lowest cards in play',
             '',
             'Esc or Space Cancel an action',
             'U            Undo an action',
@@ -287,7 +289,7 @@ class FreeCellGame(Game):
 
     def begin_locate(self):
         self.clear_action()
-        self.action_display[:] = ['L', '*', 'LO']
+        self.action_display[:] = ['L', '*', '?']
         self.locate_match = { 'color': None, 'value': None }
         self.grab_input(self.locate_callback)
 
@@ -302,6 +304,9 @@ class FreeCellGame(Game):
         elif ch == ord('r'):
             self.locate_match['color'] = 'red'
             self.action_display[1] = 'R'
+        elif ch == ord('l'):
+            self.locate_match['value'] = 'low'
+            self.action_display[2] = 'LO'
         elif ch == ord('a'):
             self.locate_match['value'] = 1
             self.action_display[2] = 'A'
@@ -340,7 +345,7 @@ class FreeCellGame(Game):
         return color is None or c.color == color
 
     def value_matches(self, c, value):
-        if value is None:
+        if value == 'low':
             return self.freecell.can_move_to_foundation(c)
         return c.value == value
 
