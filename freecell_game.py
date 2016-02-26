@@ -287,7 +287,7 @@ class FreeCellGame(Game):
 
     def begin_locate(self):
         self.clear_action()
-        self.action_display[:] = ['L', '?', '?']
+        self.action_display[:] = ['L', '*', 'LO']
         self.locate_match = { 'color': None, 'value': None }
         self.grab_input(self.locate_callback)
 
@@ -332,8 +332,17 @@ class FreeCellGame(Game):
         m = self.locate_match
         if m is not None:
             self.queue_redraw = True
-            return c.color == m['color'] and c.value == m['value']
+            return self.color_matches(c, m['color']) and \
+                self.value_matches(c, m['value'])
         return False
+
+    def color_matches(self, c, color):
+        return color is None or c.color == color
+
+    def value_matches(self, c, value):
+        if value is None:
+            return self.freecell.can_move_to_foundation(c)
+        return c.value == value
 
     def clear_action(self):
         del self.action_input[:]
